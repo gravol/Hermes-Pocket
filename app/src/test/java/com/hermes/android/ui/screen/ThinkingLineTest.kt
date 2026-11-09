@@ -8,6 +8,19 @@ import org.junit.Test
 class ThinkingLineTest {
 
     @Test
+    fun `reasoning rate is explicitly estimated from character throughput`() {
+        assertEquals(10.0, estimatedThinkingTokensPerSecond(40.0), 0.0001)
+        assertEquals(0.0, estimatedThinkingTokensPerSecond(0.0), 0.0001)
+    }
+
+    @Test
+    fun `live preview retains at most four recent lines and caps text`() {
+        assertEquals("two\nthree\nfour\nfive", liveThinkingPreview("one\ntwo\nthree\nfour\nfive\n"))
+        assertEquals("short", liveThinkingPreview("short"))
+        assertEquals(1200, liveThinkingPreview("a".repeat(1500)).length)
+    }
+
+    @Test
     fun `kaomoji status splits into face and verb`() {
         // The exact shape agent/turn_iteration_prep.py sends: f"{face} {verb}..."
         assertEquals(KawaiiStatus("(◕‿◕✿)", "pondering"), parseKawaiiStatus("(◕‿◕✿) pondering..."))

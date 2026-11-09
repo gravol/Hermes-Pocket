@@ -71,7 +71,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -124,9 +123,6 @@ private const val ActivityThinkReturnMillis = 1000L
 /** How often the shown activity is reconciled with the real one. */
 private const val ActivitySampleMillis = 100L
 
-/** Raw reasoning past this length is truncated — a `Text` holding a whole
- *  turn's unstructured reasoning janks the sheet's scroll. */
-private const val RawReasoningCap = 12_000
 
 /** The sheet takes this share of the screen at most, so it opens to the same
  *  proportion on a small phone and a tall one. A fixed dp cap could not: 640dp
@@ -145,6 +141,14 @@ private val LiveThinkingPreviewFontSize: TextUnit = 12.sp
 /** Only the tail of the reasoning is kept for the preview: a `Text` holding a
  *  whole turn's streaming reasoning relayouts the list on every flush. */
 private const val LiveThinkingPreviewTailChars = 1_200
+
+/** Approximation only: gateway deltas contain text, not token counts. */
+internal fun estimatedThinkingTokensPerSecond(charsPerSecond: Double): Double = charsPerSecond / 4.0
+
+internal fun liveThinkingPreview(thinking: String): String {
+    val tail = thinking.trimEnd().takeLast(LiveThinkingPreviewTailChars)
+    return tail.lines().takeLast(LiveThinkingPreviewLines).joinToString("\n")
+}
 
 /**
  * One thing the agent did on the way to its answer, in the order it happened.
@@ -465,11 +469,12 @@ internal fun HxThinkingTrace(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 HxActivityGlyph(activity = shown, face = face, done = false)
                 if (rateTps > 0.0) {
+                    val estimatedTps = estimatedThinkingTokensPerSecond(rateTps)
                     Text(
                         text = stringResource(
                             R.string.thinking_rate_tps,
-                            if (rateTps >= 10) rateTps.toLong().toString()
-                            else ((rateTps * 10).toLong() / 10.0).toString(),
+                            if (estimatedTps >= 10) estimatedTps.toLong().toString()
+                            else ((estimatedTps * 10).toLong() / 10.0).toString(),
                         ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
@@ -494,18 +499,15 @@ internal fun HxThinkingTrace(
     // doesn't jump around while the model thinks. The tap opens the full
     // trace like the line above it does.
     if (isStreaming && !liveThinking.isNullOrBlank()) {
-        val tail = remember(liveThinking) {
-            val trimmed = liveThinking.trim()
-            if (trimmed.length <= LiveThinkingPreviewTailChars) trimmed
-            else trimmed.take(LiveThinkingPreviewTailChars)
+        val preview = remember(liveThinking) {
+            liveThinkingPreview(liveThinking)
         }
         Text(
-            text = tail,
+            text = preview,
             style = MaterialTheme.typography.bodySmall.copy(fontSize = LiveThinkingPreviewFontSize),
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             maxLines = LiveThinkingPreviewLines,
             overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.End,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 2.dp)
@@ -671,11 +673,7 @@ private fun buildTimelineRows(items: List<HxTraceItem>): List<TimelineRow> = bui
                 add(
                     TimelineRow.Text(
                         title = "",
-                        detail = if (raw.length <= RawReasoningCap) {
-                            raw
-                        } else {
-                            raw.take(RawReasoningCap).trimEnd() + "\n…"
-                        },
+                        detail = raw,
                     ),
                 )
             }
