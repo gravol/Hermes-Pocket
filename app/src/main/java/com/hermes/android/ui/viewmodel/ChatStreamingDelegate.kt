@@ -31,6 +31,55 @@ internal class ChatStreamingDelegate(
     private val reasoningBuffer = StringBuilder()
     private val sealedInterimTexts = mutableListOf<String>()
 
+    /**
+     * Live throughput of the two streams, in characters per second, measured on
+     * the raw gateway deltas before any buffering. The app only ever sees the
+     * streamed text — the gateway's real token count only arrives (when it
+     * arrives at all) in message.complete's usage — so the honest unit is
+     * chars/s, shown as "c/s". On Latin prose it lands within ~25% of the
+     * server's tok/s; the label says what was actually measured.
+     */
+    private class RateMeter {
+        var tps: Double = 0.0
+            private set
+        private var startedAt = 0L
+        private var lastAt = 0L
+        private var chars = 0L
+
+        fun onChars(count: Int, now: Long) {
+            if (startedAt == 0L) startedAt = now
+            lastAt = now
+            chars += count
+            val seconds = (lastAt - startedAt) / 1000.0
+            if (seconds >= 0.2) tps = chars / seconds
+        }
+
+        fun reset() {
+            tps = 0.0
+            startedAt = 0L
+            lastAt = 0L
+            chars = 0L
+        }
+    }
+
+    private val reasoningRate = RateMeter()
+    private val generationRate = RateMeter()
+    private var lastRatePublishAt = 0L
+
+    /** Push the live rates into the UI state, throttled so the chat list isn't
+     *  recomposed on every delta. */
+    private fun publishRates(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && now - lastRatePublishAt < RATE_PUBLISH_INTERVAL_MS) return
+        lastRatePublishAt = now
+        val r = (reasoningRate.tps * 10).toLong() / 10.0
+        val g = (generationRate.tps * 10).toLong() / 10.0
+        state.update {
+            if (it.reasoningRateTps == r && it.generationRateTps == g) it
+            else it.copy(reasoningRateTps = r, generationRateTps = g)
+        }
+    }
+
     @Volatile
     private var streamingFlushJob: Job? = null
 
@@ -43,6 +92,9 @@ internal class ChatStreamingDelegate(
             streamingBuffer.setLength(0)
             reasoningBuffer.setLength(0)
         }
+        reasoningRate.reset()
+        generationRate.reset()
+        publishRates(force = true)
         val msgId = java.util.UUID.randomUUID().toString()
         activeAssistantMessageId = msgId
         return msgId
@@ -50,9 +102,12 @@ internal class ChatStreamingDelegate(
 
     fun enqueueDelta(text: String, isReasoning: Boolean = false) {
         if (text.isEmpty()) return
+        val now = System.currentTimeMillis()
         synchronized(bufferLock) {
             (if (isReasoning) reasoningBuffer else streamingBuffer).append(text)
         }
+        if (isReasoning) reasoningRate.onChars(text.length, now) else generationRate.onChars(text.length, now)
+        publishRates()
         if (streamingFlushJob?.isActive == true) return
         streamingFlushJob = scope.launch {
             delay(STREAM_FLUSH_INTERVAL_MS)
@@ -161,6 +216,9 @@ internal class ChatStreamingDelegate(
         }
         sealedInterimTexts.clear()
         activeAssistantMessageId = null
+        reasoningRate.reset()
+        generationRate.reset()
+        publishRates(force = true)
     }
 
     fun finalizeOrphanedMessage(marker: String) {
@@ -188,5 +246,6 @@ internal class ChatStreamingDelegate(
 
     private companion object {
         private const val STREAM_FLUSH_INTERVAL_MS = 80L
+        private const val RATE_PUBLISH_INTERVAL_MS = 250L
     }
 }

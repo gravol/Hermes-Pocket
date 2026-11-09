@@ -1008,6 +1008,11 @@ fun ChatScreen(
                                 } else {
                                     ""
                                 },
+                                thinkingRateTps = if (message is ChatMessage.Assistant && message.isStreaming) {
+                                    uiState.reasoningRateTps
+                                } else {
+                                    0.0
+                                },
                                 onRetry = { viewModel.retryLastMessage() },
                                 onRespondToClarify = viewModel::respondToClarify,
                                 onRespondToClarifyBatch = viewModel::respondToClarifyBatch,

@@ -847,6 +847,7 @@
     <string name="this_toolset_has_no_services_to_choose">This toolset has no services to choose from.</string>
     <string name="this_will_remove_from_config_yaml_and">This will remove \"%1$s\" from config.yaml and credential pool.</string>
     <string name="thought_for_s">Thought for %1$ds</string>
+    <string name="thinking_rate_tps">%1$s c/s</string>
     <string name="thoughts">Thoughts</string>
     <string name="thu">Thu</string>
     <string name="title">Title</string>

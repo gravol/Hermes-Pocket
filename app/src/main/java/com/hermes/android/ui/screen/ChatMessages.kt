@@ -137,6 +137,8 @@ internal fun MessageBubble(
     onPreviewSend: (String) -> Unit = {},
     traceItems: List<HxTraceItem> = emptyList(),
     thinkingStatus: String = "",
+    /** Live reasoning throughput (chars/s) for the streaming bubble; 0 = off. */
+    thinkingRateTps: Double = 0.0,
     onEditMessage: ((messageId: String) -> Unit)? = null,
     onDeleteMessage: ((messageId: String) -> Unit)? = null,
     reactionsEnabled: Boolean = false,
@@ -191,6 +193,7 @@ internal fun MessageBubble(
                 onPreviewSend = onPreviewSend,
                 traceItems = traceItems,
                 thinkingStatus = thinkingStatus,
+                thinkingRateTps = thinkingRateTps,
                 reactionsEnabled = reactionsEnabled,
                 onReact = onReact
                     ?.takeIf { !message.isStreaming }

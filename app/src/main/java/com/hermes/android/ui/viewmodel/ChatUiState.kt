@@ -249,6 +249,11 @@ data class ChatUiState(
     /** The agent's live status line (thinking.delta: a wait notice, a spinner
      *  phrase). Replaced, never appended; blank when there is none. */
     val thinkingStatus: String = "",
+    /** Live throughput of the reasoning stream in chars/s (0 = not streaming
+     *  or nothing measured yet); see ChatStreamingDelegate.RateMeter. */
+    val reasoningRateTps: Double = 0.0,
+    /** Live throughput of the reply (message) stream in chars/s. */
+    val generationRateTps: Double = 0.0,
     /** The `/btw` side question open in its sheet; null when the sheet is closed. */
     val sideQuestion: SideQuestionUi? = null,
 )

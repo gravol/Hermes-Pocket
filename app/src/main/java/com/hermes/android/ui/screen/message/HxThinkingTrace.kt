@@ -71,8 +71,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.hermes.android.R
 import com.hermes.android.ui.design.HxIcons
 import com.hermes.android.ui.viewmodel.ChatMessage
@@ -129,6 +132,19 @@ private const val RawReasoningCap = 12_000
  *  proportion on a small phone and a tall one. A fixed dp cap could not: 640dp
  *  is four fifths of one screen and the whole of another. */
 private const val SheetScreenFraction = 0.6f
+
+/** While the model thinks, the collapsed line also shows this many of the most
+ *  recent lines of the live reasoning, so there is something to read without
+ *  opening the sheet. The tap target stays the whole block. */
+private const val LiveThinkingPreviewLines = 4
+
+/** The live preview is set in type below the body so it reads as a side feed,
+ *  not as the reply. */
+private val LiveThinkingPreviewFontSize: TextUnit = 12.sp
+
+/** Only the tail of the reasoning is kept for the preview: a `Text` holding a
+ *  whole turn's streaming reasoning relayouts the list on every flush. */
+private const val LiveThinkingPreviewTailChars = 1_200
 
 /**
  * One thing the agent did on the way to its answer, in the order it happened.
@@ -368,6 +384,12 @@ internal fun HxThinkingTrace(
     status: String = "",
     /** Settings > "Hermes kaomoji": the agent's own face and verb in place of the star. */
     kaomoji: Boolean = false,
+    /** The reasoning streamed so far this turn; shown as a short live preview
+     *  under the activity line while the model is still thinking. */
+    liveThinking: String? = null,
+    /** Live reasoning throughput in chars/s (0 = nothing measured yet); shown
+     *  beside the activity glyph while streaming. */
+    rateTps: Double = 0.0,
 ) {
     if (items.isEmpty()) return
     val tools = remember(items) { items.filterIsInstance<HxTraceItem.Tool>().map { it.call } }
@@ -438,7 +460,24 @@ internal fun HxThinkingTrace(
             val target = runningTool?.let { HxTraceActivity.of(it.toolName) } ?: HxTraceActivity.Think
             val shown = rememberSettledActivity(target)
             val face = turnFace?.takeIf { kaomoji && shown == HxTraceActivity.Think }
-            HxActivityGlyph(activity = shown, face = face, done = false)
+            // The live rate rides with the glyph, not the label: the label
+            // swaps between verb and notice, the number should stay put.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HxActivityGlyph(activity = shown, face = face, done = false)
+                if (rateTps > 0.0) {
+                    Text(
+                        text = stringResource(
+                            R.string.thinking_rate_tps,
+                            if (rateTps >= 10) rateTps.toLong().toString()
+                            else ((rateTps * 10).toLong() / 10.0).toString(),
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 2.dp),
+                    )
+                }
+            }
             val verb = turnVerb
             val label = when {
                 shown != HxTraceActivity.Think -> stringResource(shown.label)
@@ -448,6 +487,30 @@ internal fun HxThinkingTrace(
             }
             HxSwapLabel(label)
         }
+    }
+
+    // A few lines of the live reasoning under the activity line: enough to
+    // follow along without opening the sheet, short enough that the chat
+    // doesn't jump around while the model thinks. The tap opens the full
+    // trace like the line above it does.
+    if (isStreaming && !liveThinking.isNullOrBlank()) {
+        val tail = remember(liveThinking) {
+            val trimmed = liveThinking.trim()
+            if (trimmed.length <= LiveThinkingPreviewTailChars) trimmed
+            else trimmed.take(LiveThinkingPreviewTailChars)
+        }
+        Text(
+            text = tail,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = LiveThinkingPreviewFontSize),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            maxLines = LiveThinkingPreviewLines,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp)
+                .noRippleClickable { sheetVisible = true },
+        )
     }
 
     if (sheetVisible) {

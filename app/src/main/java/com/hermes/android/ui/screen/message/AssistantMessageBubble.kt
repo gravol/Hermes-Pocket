@@ -80,6 +80,8 @@ internal fun AssistantMessageBubble(
     onReact: ((String?) -> Unit)? = null,
     /** Settings > Hermes kaomoji: the agent's face and verb on the thinking line. */
     kaomoji: Boolean = false,
+    /** Live reasoning throughput (chars/s) shown beside the thinking glyph. */
+    thinkingRateTps: Double = 0.0,
 ) {
     val isLongResponse = message.text.length > 1500
     var isResponseExpanded by remember { mutableStateOf(true) }
@@ -113,6 +115,8 @@ internal fun AssistantMessageBubble(
                             messageId = message.id,
                             status = thinkingStatus,
                             kaomoji = kaomoji,
+                            liveThinking = message.reasoning,
+                            rateTps = thinkingRateTps,
                         )
                     }
                     // Hermes is drawing an image: hold its place until the reply shows it.

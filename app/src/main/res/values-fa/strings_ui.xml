@@ -845,6 +845,7 @@
     <string name="this_toolset_has_no_services_to_choose">این گروه ابزار سرویسی برای انتخاب ندارد.</string>
     <string name="this_will_remove_from_config_yaml_and">\"%1$s\" از config.yaml و credential pool حذف میشه.</string>
     <string name="thought_for_s">%1$d ثانیه فکر کرد</string>
+    <string name="thinking_rate_tps">%1$s کاراکتر/ثانیه</string>
     <string name="thoughts">افکار</string>
     <string name="thu">پنج</string>
     <string name="title">عنوان</string>
