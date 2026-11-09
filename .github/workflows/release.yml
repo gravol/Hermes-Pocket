@@ -39,8 +39,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
-              echo "::error::Manual signed-release runs must be dispatched from main."
+            if [[ "$GITHUB_REF" != "refs/heads/main" && "$GITHUB_REF" != "refs/tags/$TARGET_RELEASE_TAG" ]]; then
+              echo "::error::Dispatch from main or the exact target tag."
               exit 1
             fi
             if [[ ! "$TARGET_RELEASE_TAG" =~ ^v[0-9] ]] || ! git check-ref-format "refs/tags/$TARGET_RELEASE_TAG"; then
@@ -51,13 +51,25 @@ jobs:
               echo "::error::Tag $TARGET_RELEASE_TAG does not exist on origin; refusing to create a release."
               exit 1
             fi
-            if ! release_json="$(gh release view "$TARGET_RELEASE_TAG" --json tagName,isDraft,isPrerelease 2>/dev/null)"; then
-              echo "::error::Release $TARGET_RELEASE_TAG does not exist; refusing to create a release."
-              exit 1
-            fi
-            if ! jq -e --arg tag "$TARGET_RELEASE_TAG" '.tagName == $tag and .isDraft == false and .isPrerelease == false' <<<"$release_json" >/dev/null; then
-              echo "::error::Target must be the named existing stable (non-draft, non-prerelease) release."
-              exit 1
+            if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+              remote_sha="$(git ls-remote origin "refs/tags/$TARGET_RELEASE_TAG" | cut -f1)"
+              if [[ "$remote_sha" != "$GITHUB_SHA" ]]; then
+                echo "::error::Target tag does not point at the checked-out commit."
+                exit 1
+              fi
+              if gh release view "$TARGET_RELEASE_TAG" >/dev/null 2>&1; then
+                echo "::error::Release already exists; refusing to overwrite it."
+                exit 1
+              fi
+            else
+              if ! release_json="$(gh release view "$TARGET_RELEASE_TAG" --json tagName,isDraft,isPrerelease 2>/dev/null)"; then
+                echo "::error::Release $TARGET_RELEASE_TAG does not exist; refusing to create a release."
+                exit 1
+              fi
+              if ! jq -e --arg tag "$TARGET_RELEASE_TAG" '.tagName == $tag and .isDraft == false and .isPrerelease == false' <<<"$release_json" >/dev/null; then
+                echo "::error::Target must be the named existing stable (non-draft, non-prerelease) release."
+                exit 1
+              fi
             fi
           else
             TARGET_RELEASE_TAG="$GITHUB_REF_NAME"
@@ -156,7 +168,13 @@ jobs:
         run: |
           set -euo pipefail
           apk="app/build/outputs/apk/release/app-release.apk"
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$GITHUB_REF" == refs/tags/* ]]; then
+            if gh release view "$TARGET_RELEASE_TAG" >/dev/null 2>&1; then
+              echo "::error::Release appeared during build; refusing to overwrite it."
+              exit 1
+            fi
+            gh release create "$TARGET_RELEASE_TAG" "$apk" --title "Hermes Pocket $TARGET_RELEASE_TAG" --notes "Signed release. This version uses a new signing key; uninstalling the previous version may erase its local data."
+          elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             # Recheck immediately before upload; manual runs must never create releases.
             if ! gh release view "$TARGET_RELEASE_TAG" >/dev/null 2>&1; then
               echo "::error::Target release disappeared; refusing to create or modify another release."

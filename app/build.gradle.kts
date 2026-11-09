@@ -35,7 +35,7 @@ android {
         minSdk = 29    // Android 10 per ADR-012
         targetSdk = 35 // Latest Stable per ADR-012
         versionCode = 37
-        versionName = "3.1.5.2"
+        versionName = "3.1.5.3"
         // The commit this APK was built from (CI sets GITHUB_SHA); empty for a local build.
         // A debug build compares it with the rolling `debug-latest` release to offer updates.
         buildConfigField("String", "GIT_SHA", "\"${(System.getenv("GITHUB_SHA") ?: "").take(8)}\"")
